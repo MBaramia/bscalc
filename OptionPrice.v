@@ -2,10 +2,26 @@
 //////////////////////////////////////////////////////////////////////////////////
 // OptionPrice Module
 // Computes the Black-Scholes option price using fixed-point Q16.16 arithmetic.
-// Uses an exponential module to compute exp(-r*T) and then computes the call and
-// put prices. This version includes detailed $display debug statements for each
-// state so that you can see the raw and converted values.
-// All signals are declared as signed.
+// Uses an exponential module to compute exp(-r*T) and then computes the call price.
+// 
+// In Q16.16:
+//   rate: risk-free rate (e.g., 0.05 * 65536 ? 3277)
+//   timetm: time to maturity (e.g., 1 year = 65536)
+//   spot: spot price (e.g., 100*65536 = 6,553,600)
+//   strike: strike price (e.g., 100*65536 = 6,553,600)
+//   Nd1, Nd2: cumulative normal distribution values for d1 and d2
+//
+// The discount factor is computed as:
+//   exp_input = (rate * timetm) >>> 16  (i.e., 0.05 in Q16.16 for a 5% rate)
+// then the exponential module computes exp(-exp_input), which yields ~0.95123.
+// The option price is computed as:
+//   Call Price = (spot * Nd1) - (strike * exp(-r*T) * Nd2)
+// For example, with Nd1 ? 0.8413 and Nd2 ? 0.1587, we expect:
+//   spot_Nd1 ? 100*0.8413 = 84.13,
+//   Ke_rt = 100*0.95123 ? 95.12,
+//   Ke_rt_Nd2 ? 95.12*0.1587 = 15.12,
+//   Call Price ? 84.13 - 15.12 = 69.01,
+// which in Q16.16 is approximately 69.01*65536 ? 4,525,000.
 //////////////////////////////////////////////////////////////////////////////////
 
 module OptionPrice #(
@@ -73,42 +89,32 @@ module OptionPrice #(
         end else begin
             case (state)
                 3'b000: begin
-                    // Compute exp_input = -rate * timetm in Q16.16.
-                    exp_input <= -((rate * timetm) >>> 16);
-                    $display("State 0: exp_input raw=%d, float=%f", 
-                             exp_input, $itor($signed(exp_input))/65536.0);
+                    // Compute exp_input = (rate * timetm) >>> 16.
+                    // (Remove the negative sign so that the exponential module computes exp(-0.05))
+                    exp_input <= ((rate * timetm) >>> 16);
                     state <= 3'b001;
                 end
                 3'b001: begin
                     // Wait one cycle for exp_output then compute Ke_rt = (strike * exp_output)
                     temp64 = $signed(strike) * $signed(exp_output);
                     Ke_rt <= temp64[47:16];
-                    $display("State 1: exp_output raw=%d, float=%f, Ke_rt raw=%d, float=%f", 
-                             exp_output, $itor($signed(exp_output))/65536.0,
-                             Ke_rt, $itor($signed(Ke_rt))/65536.0);
                     state <= 3'b010;
                 end
                 3'b010: begin
                     // Compute spot_Nd1 = (spot * Nd1)
                     temp64 = $signed(spot) * $signed(Nd1);
                     spot_Nd1 <= temp64[47:16];
-                    $display("State 2: spot_Nd1 raw=%d, float=%f", 
-                             spot_Nd1, $itor($signed(spot_Nd1))/65536.0);
                     state <= 3'b011;
                 end
                 3'b011: begin
                     // Compute Ke_rt_Nd2 = (Ke_rt * Nd2)
                     temp64 = $signed(Ke_rt) * $signed(Nd2);
                     Ke_rt_Nd2 <= temp64[47:16];
-                    $display("State 3: Ke_rt_Nd2 raw=%d, float=%f", 
-                             Ke_rt_Nd2, $itor($signed(Ke_rt_Nd2))/65536.0);
                     state <= 3'b100;
                 end
                 3'b100: begin
                     // Compute Call Option Price: COptionPrice = spot_Nd1 - Ke_rt_Nd2.
                     COptionPrice <= $signed(spot_Nd1) - $signed(Ke_rt_Nd2);
-                    $display("State 4: Call Price raw=%d, float=%f", 
-                             COptionPrice, $itor($signed(COptionPrice))/65536.0);
                     state <= 3'b101;
                 end
                 3'b101: begin
@@ -116,12 +122,10 @@ module OptionPrice #(
                     POptionPrice <= $signed(Ke_rt) - $signed(spot_Nd1);
                     if (otype == 1'b0) begin
                         OptionPrice <= COptionPrice;
-                        $display("State 5: Call Option Selected, OptionPrice raw=%d, float=%f",
-                                 OptionPrice, $itor($signed(OptionPrice))/65536.0);
+                        
                     end else begin
                         OptionPrice <= POptionPrice;
-                        $display("State 5: Put Option Selected, OptionPrice raw=%d, float=%f",
-                                 OptionPrice, $itor($signed(OptionPrice))/65536.0);
+                        
                     end
                     state <= 3'b000;
                 end
