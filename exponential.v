@@ -174,4 +174,3 @@ module exponential #(
     end
 
 endmodule
-`timescale 1ns / 1ps

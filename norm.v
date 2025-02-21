@@ -1,4 +1,5 @@
 `timescale 1ns / 1ps
+
 module norm #(
     parameter WIDTH = 32
 )(
@@ -17,8 +18,8 @@ module norm #(
         .clk(clk),
         .reset(reset),
         .start(start),
-        .d(d2),
-        .N(Nd1),
+        .d(d1),
+        .N(Nd2),
         .done(done1)
     );
     
@@ -26,8 +27,8 @@ module norm #(
         .clk(clk),
         .reset(reset),
         .start(start),
-        .d(d1),
-        .N(Nd2),
+        .d(d2),
+        .N(Nd1),
         .done(done2)
     );
     

@@ -14,6 +14,7 @@ module top #(
 )(
     input clk,
     input reset,
+    input start,
     input signed [WIDTH-1:0] spot,      // Spot price (Q16.16)
     input signed [WIDTH-1:0] strike,    // Strike price (Q16.16)
     input signed [WIDTH-1:0] timetm,    // Time to maturity (Q16.16)
@@ -28,19 +29,20 @@ module top #(
     wire signed [WIDTH-1:0] d2;
     wire signed [WIDTH-1:0] norm_Nd1;
     wire signed [WIDTH-1:0] norm_Nd2;
-    
+    wire norm_start;
     // Instantiate d1d2 module to compute d1 and d2.
     d1d2 d1d2_inst (
         .clk(clk),
         .reset(reset),
-        .start(1'b1),
+        .start(start),
         .S0(spot),
         .K(strike),
         .T(timetm),
         .sigma(sigma),
         .r(rate),
         .d1(d1),
-        .d2(d2)
+        .d2(d2),
+        .norm_start(norm_start)
     );
     
     // Instantiate the norm module.
@@ -51,12 +53,12 @@ module top #(
     norm norm_inst (
         .clk(clk),
         .reset(reset),
-        .start(1'b1), // Always start (for simplicity)
+        .start(norm_start), // Always start (for simplicity)
         .d1(d1),
         .d2(d2),
         .Nd1(norm_Nd1),
         .Nd2(norm_Nd2),
-        .done()      // Unused
+        .done(done)      // Unused
     );
     
     // Instantiate the OptionPrice module.
@@ -76,6 +78,7 @@ module top #(
         .Nd1(norm_Nd2), // Swapped connection.
         .Nd2(norm_Nd1), // Swapped connection.
         .otype(otype),
+        .norm_done(done),
         .OptionPrice(OptionPrice)
     );
     
