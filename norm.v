@@ -19,6 +19,7 @@ module norm #(
     localparam IDLE = 0;
     localparam PROC_D1 = 1;
     localparam PROC_D2 = 2;
+    localparam COMPLETE = 3;
     
     reg [1:0] state;
     
@@ -78,6 +79,12 @@ module norm #(
                     if (done2) begin
                         Nd2 <= cdf2;
                         done <= 1;
+                        state <= COMPLETE;
+                    end
+                end
+                
+                COMPLETE: begin
+                    if (!start) begin
                         state <= IDLE;
                     end
                 end
